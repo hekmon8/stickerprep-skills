@@ -1,0 +1,4 @@
+interface:
+  display_name: "WeChat Submission Kit"
+  short_description: "Build a rule-checked WeChat submission ZIP"
+  default_prompt: "Use $wechat-sticker-submission-kit to prepare my sticker files for WeChat submission."

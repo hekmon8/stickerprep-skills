@@ -1,0 +1,4 @@
+interface:
+  display_name: "WeChat Sticker Maker"
+  short_description: "Turn one image into a WeChat sticker set"
+  default_prompt: "Use $wechat-sticker-maker to turn my character image into a WeChat sticker set."

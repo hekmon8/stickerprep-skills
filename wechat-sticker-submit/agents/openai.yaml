@@ -1,0 +1,4 @@
+interface:
+  display_name: "WeChat Sticker Submit"
+  short_description: "Submit a prepared sticker set with Computer Use"
+  default_prompt: "Use $wechat-sticker-submit to upload my prepared sticker set to the WeChat Sticker Open Platform."
