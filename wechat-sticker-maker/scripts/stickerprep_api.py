@@ -118,7 +118,15 @@ def main():
         raise SystemExit(f"Insufficient credits: need about {cost}, have {credits.get('balance', 0)}. Visit https://stickerprep.com/pricing")
 
     body, content_type = multipart(args.image)
-    raw, _ = api(BASE_URL, key, "POST", "/api/characters/upload", body=body, content_type=content_type, timeout=300)
+    raw, _ = api(
+        BASE_URL,
+        key,
+        "POST",
+        "/api/characters/upload",
+        body=body,
+        content_type=content_type,
+        timeout=max(300, args.timeout_minutes * 60),
+    )
     character = uploaded_character(raw)
     pack = json_api(BASE_URL, key, "POST", "/api/packs", {
         "theme": args.theme,

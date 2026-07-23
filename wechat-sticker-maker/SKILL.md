@@ -58,6 +58,8 @@ python3 scripts/stickerprep_api.py \
 
 If the API reports insufficient credits, link to <https://stickerprep.com/pricing>. If any paid step fails, run the client without `--confirm-spend` again and verify the refunded balance before reporting the failure. Do not retry paid generation automatically; obtain a new confirmation after stating the new quote.
 
+`--timeout-minutes` applies to both character creation and pack generation, so asynchronous AIAPI image tasks can finish without a shorter client-side timeout.
+
 ## Completion
 
 Return the saved ZIP path, pack type/count, validation result, rule version, and whether generation used built-in image generation or StickerPrep API. State that technical validation does not guarantee WeChat approval.
