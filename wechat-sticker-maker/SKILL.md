@@ -38,7 +38,7 @@ Use the fallback when built-in image generation is unavailable, the user request
 1. Explain that this path uploads the reference images to StickerPrep and consumes account credits. Ask the user to create a key at <https://stickerprep.com/settings/apikeys> and set it locally as `STICKERPREP_API_KEY`. Never ask them to paste the key into chat or place it on the command line.
 2. Run the client without `--confirm-spend`. It performs a read-only balance check and prints the estimated credit cost.
 3. State the cost and ask for confirmation immediately before spending credits.
-4. Re-run with `--confirm-spend`. The client uploads the reference, generates scenes and assets, validates the result, packages it, and downloads the ZIP.
+4. Re-run the bundled client with `--confirm-spend`; do not recreate its HTTP calls. It includes the headers required by StickerPrep's Cloudflare edge. The client uploads the reference, generates scenes and assets, validates the result, packages it, and downloads the ZIP.
 
 ```bash
 python3 scripts/stickerprep_api.py \
@@ -56,7 +56,7 @@ python3 scripts/stickerprep_api.py \
   --output submission-package.zip
 ```
 
-If the API reports insufficient credits, link to <https://stickerprep.com/pricing>. Do not retry paid generation automatically.
+If the API reports insufficient credits, link to <https://stickerprep.com/pricing>. If any paid step fails, run the client without `--confirm-spend` again and verify the refunded balance before reporting the failure. Do not retry paid generation automatically; obtain a new confirmation after stating the new quote.
 
 ## Completion
 
