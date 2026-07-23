@@ -17,7 +17,11 @@ def api(base, key, method, path, payload=None, body=None, content_type=None, tim
     if payload is not None:
         body = json.dumps(payload).encode()
         content_type = "application/json"
-    headers = {"Authorization": f"Bearer {key}"}
+    headers = {
+        "Authorization": f"Bearer {key}",
+        "User-Agent": "StickerPrep-Skill/1.0",
+        "Accept": "application/json, text/event-stream, application/zip",
+    }
     if content_type:
         headers["Content-Type"] = content_type
     request = urllib.request.Request(f"{base.rstrip('/')}{path}", data=body, headers=headers, method=method)
