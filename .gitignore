@@ -1,3 +1,11 @@
 __pycache__/
 *.pyc
 .DS_Store
+.env
+.env.*
+data/
+.output/
+.nitro/
+src/paraglide/
+src/routeTree.gen.ts
+npm-debug.log*

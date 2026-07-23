@@ -39,6 +39,39 @@ def csv_bytes(rows):
     return text.getvalue().encode("utf-8-sig")
 
 
+def validate_files(files, rules, count):
+    errors = []
+    warnings = []
+    specs = {
+        "main": rules["main"], "thumb": rules["thumb"], "banner": rules["banner"],
+        "cover": rules["cover"], "icon": rules["icon"],
+    }
+    for name, data in files.items():
+        category = next((key for key in specs if f"/{key}/" in name or name.endswith(f"/{key}.png")), None)
+        if not category:
+            continue
+        image = Image.open(io.BytesIO(data))
+        rule = specs[category]
+        if list(image.size) != rule["size"]:
+            errors.append({"file": name, "code": "dimensions"})
+        if len(data) > rule["maxKb"] * 1024:
+            errors.append({"file": name, "code": "fileSize"})
+        if image.format.lower() not in rule["formats"]:
+            errors.append({"file": name, "code": "format"})
+        if category in ("main", "cover", "icon"):
+            alpha = image.convert("RGBA").getchannel("A")
+            if alpha.getextrema()[0] == 255:
+                errors.append({"file": name, "code": "transparency"})
+            bbox = alpha.getbbox()
+            if bbox and (bbox[0] < 2 or bbox[1] < 2 or bbox[2] > image.width - 2 or bbox[3] > image.height - 2):
+                warnings.append({"file": name, "code": "edgeMargin"})
+    main_names = {pathlib.PurePosixPath(name).stem for name in files if "/main/" in name}
+    thumb_names = {pathlib.PurePosixPath(name).stem for name in files if "/thumb/" in name}
+    if main_names != thumb_names or len(main_names) != count:
+        errors.append({"code": "pairing"})
+    return errors, warnings
+
+
 def main():
     parser = argparse.ArgumentParser(description="Prepare a static WeChat sticker submission ZIP")
     parser.add_argument("--source", required=True)
@@ -107,6 +140,10 @@ def main():
         if path.is_file():
             files[f"wechat-submission/appreciation/{output_name}"] = save_png(Image.open(path), tuple(rule["size"]), rule["maxKb"], True)
 
+    errors, warnings = validate_files(files, rules, count)
+    if errors:
+        raise RuntimeError(f"prepared files failed validation: {json.dumps(errors, ensure_ascii=False)}")
+
     manifest = {
         "pack_name": metadata.get("pack_name", ""),
         "pack_description": metadata.get("description", ""),
@@ -124,7 +161,8 @@ def main():
     files["optional-materials/review/validation_report.json"] = json.dumps({
         "rule_version": active["version"],
         "passed": True,
-        "errors": [],
+        "errors": errors,
+        "warnings": warnings,
         "sticker_count": count,
     }, ensure_ascii=False, indent=2).encode()
     files["optional-materials/rights/rights_evidence_checklist.md"] = (
@@ -133,8 +171,8 @@ def main():
         "This package does not create or assert rights on the creator's behalf.\n"
     ).encode()
     files["README.md"] = (
-        f"# WeChat submission package\n\nValidated against StickerPrep rule {active['version']}. "
-        "Technical validation does not guarantee WeChat approval.\n"
+        f"# WeChat submission package\n\nAutomated checks passed against StickerPrep rule {active['version']} "
+        f"with {len(warnings)} warning(s). Technical validation does not guarantee WeChat approval.\n"
     ).encode()
 
     output = pathlib.Path(args.output)
@@ -146,7 +184,8 @@ def main():
         "rule_version": active["version"],
         "sticker_count": count,
         "files": len(files),
-        "errors": [],
+        "errors": errors,
+        "warnings": warnings,
     }, ensure_ascii=False, indent=2))
 
 

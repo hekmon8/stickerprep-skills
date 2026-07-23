@@ -10,6 +10,8 @@ import urllib.error
 import urllib.request
 import uuid
 
+BASE_URL = "https://stickerprep.com"
+
 
 def api(base, key, method, path, payload=None, body=None, content_type=None, timeout=120):
     if payload is not None:
@@ -24,8 +26,14 @@ def api(base, key, method, path, payload=None, body=None, content_type=None, tim
             raw = response.read()
             return raw, response.headers.get_content_type()
     except urllib.error.HTTPError as error:
-        detail = error.read().decode("utf-8", "replace")
-        raise RuntimeError(f"StickerPrep returned HTTP {error.code}: {detail[:500]}") from None
+        message = {
+            400: "The request was rejected. Check the supplied files and options.",
+            401: "The API key is missing or invalid.",
+            403: "The API key is not allowed to perform this action.",
+            404: "The requested StickerPrep resource was not found.",
+            429: "Too many requests. Wait before retrying.",
+        }.get(error.code, "StickerPrep is temporarily unavailable.")
+        raise RuntimeError(message) from None
 
 
 def json_api(base, key, method, path, payload=None):
@@ -83,7 +91,6 @@ def main():
     parser.add_argument("--theme", required=True)
     parser.add_argument("--type", choices=("static", "animated"), default="static")
     parser.add_argument("--count", type=int, choices=(8, 16, 24), default=8)
-    parser.add_argument("--base-url", default="https://stickerprep.com")
     parser.add_argument("--output", default="submission-package.zip")
     parser.add_argument("--confirm-spend", action="store_true")
     parser.add_argument("--poll-seconds", type=int, default=10)
@@ -99,7 +106,7 @@ def main():
         if not pathlib.Path(image).is_file():
             parser.error(f"image not found: {image}")
 
-    credits = json_api(args.base_url, key, "GET", "/api/credits?summary=1")
+    credits = json_api(BASE_URL, key, "GET", "/api/credits?summary=1")
     cost = estimated_cost(args.type, args.count)
     plan = {"estimated_credits": cost, "available_credits": credits.get("balance", 0), "requires_confirmation": not args.confirm_spend}
     if not args.confirm_spend:
@@ -109,20 +116,20 @@ def main():
         raise SystemExit(f"Insufficient credits: need about {cost}, have {credits.get('balance', 0)}. Visit https://stickerprep.com/pricing")
 
     body, content_type = multipart(args.image)
-    raw, _ = api(args.base_url, key, "POST", "/api/characters/upload", body=body, content_type=content_type, timeout=300)
+    raw, _ = api(BASE_URL, key, "POST", "/api/characters/upload", body=body, content_type=content_type, timeout=300)
     character = uploaded_character(raw)
-    pack = json_api(args.base_url, key, "POST", "/api/packs", {
+    pack = json_api(BASE_URL, key, "POST", "/api/packs", {
         "theme": args.theme,
         "characterId": character["id"],
         "packType": args.type,
         "stickerCount": args.count,
     })
-    json_api(args.base_url, key, "POST", f"/api/packs/{pack['id']}/scenes")
-    json_api(args.base_url, key, "POST", f"/api/packs/{pack['id']}/generate")
+    json_api(BASE_URL, key, "POST", f"/api/packs/{pack['id']}/scenes")
+    json_api(BASE_URL, key, "POST", f"/api/packs/{pack['id']}/generate")
 
     deadline = time.time() + args.timeout_minutes * 60
     while time.time() < deadline:
-        detail = json_api(args.base_url, key, "GET", f"/api/packs/{pack['id']}")
+        detail = json_api(BASE_URL, key, "GET", f"/api/packs/{pack['id']}")
         if detail["status"] == "ready":
             break
         if detail["status"] in ("failed", "canceled"):
@@ -131,14 +138,14 @@ def main():
     else:
         raise RuntimeError(f"Timed out waiting for pack {pack['id']}; it may still be generating")
 
-    validation = json_api(args.base_url, key, "POST", f"/api/packs/{pack['id']}/validate")
+    validation = json_api(BASE_URL, key, "POST", f"/api/packs/{pack['id']}/validate")
     if not validation.get("passed"):
         print(json.dumps({"pack_id": pack["id"], "validation": validation}, ensure_ascii=False, indent=2))
         raise RuntimeError("Generated pack did not pass validation; no ZIP was downloaded")
-    package = json_api(args.base_url, key, "POST", f"/api/packs/{pack['id']}/package")
+    package = json_api(BASE_URL, key, "POST", f"/api/packs/{pack['id']}/package")
     with urllib.request.urlopen(package["zipPackUrl"], timeout=120) as response:
         pathlib.Path(args.output).write_bytes(response.read())
-    rules = json_api(args.base_url, key, "GET", "/api/rules/active")
+    rules = json_api(BASE_URL, key, "GET", "/api/rules/active")
     print(json.dumps({
         "pack_id": pack["id"],
         "output": str(pathlib.Path(args.output).resolve()),
