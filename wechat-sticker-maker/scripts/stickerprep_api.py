@@ -81,10 +81,6 @@ def uploaded_character(raw):
     return character
 
 
-def estimated_cost(pack_type, count):
-    return 20 + 5 + count * (30 if pack_type == "animated" else 15) + 30
-
-
 def main():
     parser = argparse.ArgumentParser(description="Generate a WeChat sticker pack with StickerPrep")
     parser.add_argument("--image", action="append", required=True, help="Reference image; repeat up to four times")
@@ -106,8 +102,10 @@ def main():
         if not pathlib.Path(image).is_file():
             parser.error(f"image not found: {image}")
 
-    credits = json_api(BASE_URL, key, "GET", "/api/credits?summary=1")
-    cost = estimated_cost(args.type, args.count)
+    credits = json_api(BASE_URL, key, "GET", f"/api/credits?summary=1&packType={args.type}&stickerCount={args.count}")
+    cost = credits.get("estimatedCredits")
+    if not isinstance(cost, int):
+        raise RuntimeError("StickerPrep did not return a generation quote")
     plan = {"estimated_credits": cost, "available_credits": credits.get("balance", 0), "requires_confirmation": not args.confirm_spend}
     if not args.confirm_spend:
         print(json.dumps(plan, ensure_ascii=False, indent=2))
