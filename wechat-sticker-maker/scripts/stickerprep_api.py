@@ -20,7 +20,7 @@ def api(base, key, method, path, payload=None, body=None, content_type=None, tim
     headers = {
         "Authorization": f"Bearer {key}",
         "User-Agent": "StickerPrep-Skill/1.0",
-        "Accept": "application/json, application/zip",
+        "Accept": "application/json, text/event-stream, application/zip",
     }
     if content_type:
         headers["Content-Type"] = content_type
@@ -64,15 +64,25 @@ def multipart(paths):
     return b"".join(chunks), f"multipart/form-data; boundary={boundary}"
 
 
-def wait_for_character(base, key, task_id, poll_seconds, deadline):
-    while time.time() < deadline:
-        task = json_api(base, key, "GET", f"/api/characters/tasks/{task_id}")
-        if task.get("character"):
-            return task["character"]
-        if task.get("status") == "failed":
-            raise RuntimeError(task.get("error") or "Character generation failed")
-        time.sleep(poll_seconds)
-    raise RuntimeError(f"Timed out waiting for character task {task_id}; it may still be generating")
+def uploaded_character(raw):
+    character = None
+    for block in raw.decode("utf-8", "replace").split("\n\n"):
+        event = ""
+        data = ""
+        for line in block.splitlines():
+            if line.startswith("event:"):
+                event = line[6:].strip()
+            elif line.startswith("data:"):
+                data += line[5:].strip()
+        if event == "error":
+            raise RuntimeError(json.loads(data).get("message", "Character upload failed"))
+        if event == "complete" and data:
+            value = json.loads(data)
+            if isinstance(value, dict) and value.get("id"):
+                character = value
+    if not character:
+        raise RuntimeError("StickerPrep did not return a completed character")
+    return character
 
 
 def main():
@@ -115,13 +125,9 @@ def main():
         "/api/characters/upload",
         body=body,
         content_type=content_type,
-        timeout=120,
+        timeout=max(300, args.timeout_minutes * 60),
     )
-    uploaded = json.loads(raw)
-    if uploaded.get("code") != 0 or not uploaded.get("data", {}).get("taskId"):
-        raise RuntimeError(uploaded.get("message") or "StickerPrep did not accept the character task")
-    deadline = time.time() + args.timeout_minutes * 60
-    character = wait_for_character(BASE_URL, key, uploaded["data"]["taskId"], args.poll_seconds, deadline)
+    character = uploaded_character(raw)
     pack = json_api(BASE_URL, key, "POST", "/api/packs", {
         "theme": args.theme,
         "characterId": character["id"],
